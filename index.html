@@ -50,7 +50,7 @@
     flex-shrink: 0;
     position: relative;
   }
-  canvas { display: block; border-radius: 2px; }
+  canvas { display: block; border-radius: 2px; cursor: none; }
   .canvas-hint {
     position: absolute;
     top: 50%;
@@ -285,6 +285,17 @@ let freehandPoints = [];
 let selectedSweepIdx = -1;
 let moveOffset = null;
 
+// Rake cursor state
+let cursorPos = null;       // current mouse position on canvas
+let lastCursorPos = null;   // previous position (to compute direction)
+let cursorAngle = 0;        // angle the rake is perpendicular to
+// Off-screen buffer to cache the rendered scene (avoids full re-render on every cursor move)
+const bufferCanvas = document.createElement('canvas');
+bufferCanvas.width = W;
+bufferCanvas.height = H;
+const bufCtx = bufferCanvas.getContext('2d');
+let bufferDirty = true;     // true when sweeps changed and buffer needs re-render
+
 // ──────────────────────────────────────────────
 // RENDERING
 // ──────────────────────────────────────────────
@@ -454,17 +465,105 @@ function addGrain() {
   ctx.putImageData(imageData, 0, 0);
 }
 
-function render() {
+function renderToBuffer() {
+  // Render the full scene to the off-screen buffer
+  const origCtx = ctx;
+  // Temporarily redirect drawing functions to buffer
+  // We'll just draw directly to bufCtx
+  const saveCtx = window._drawCtx;
+  window._drawCtx = bufCtx;
+
+  bufCtx.fillStyle = '#ede8e0';
+  bufCtx.fillRect(0, 0, W, H);
+
+  // Draw sweeps to buffer using main ctx (we'll copy after)
+  // Actually, simpler: render to main canvas, then snapshot to buffer
   drawBase();
   sweeps.forEach((sw, i) => drawSweep(sw, i, 0, 0));
   addGrain();
 
-  // Highlight selected sweep in move mode
   if (mode === 'move' && selectedSweepIdx >= 0 && selectedSweepIdx < sweeps.length) {
     drawSelectionIndicator(sweeps[selectedSweepIdx]);
   }
 
+  // Snapshot main canvas into buffer
+  bufCtx.drawImage(canvas, 0, 0);
+  bufferDirty = false;
+}
+
+function render() {
+  renderToBuffer();
+  // Draw buffer to screen, then overlay cursor
+  ctx.drawImage(bufferCanvas, 0, 0);
+  drawRakeCursor();
   updateUI();
+}
+
+// Draw the rake cursor: shows each tooth as a dot along a line perpendicular to movement
+function drawRakeCursor() {
+  if (!cursorPos || dragging || mode === 'move') return;
+
+  const halfWidth = (settings.teeth - 1) * settings.spacing / 2;
+  // Normal direction (perpendicular to movement)
+  const nx = Math.cos(cursorAngle);
+  const ny = Math.sin(cursorAngle);
+
+  ctx.save();
+
+  // Draw the rake body (a subtle line spanning all teeth)
+  const x1 = cursorPos.x + nx * (halfWidth + settings.spacing * 0.5);
+  const y1 = cursorPos.y + ny * (halfWidth + settings.spacing * 0.5);
+  const x2 = cursorPos.x - nx * (halfWidth + settings.spacing * 0.5);
+  const y2 = cursorPos.y - ny * (halfWidth + settings.spacing * 0.5);
+
+  ctx.beginPath();
+  ctx.moveTo(x1, y1);
+  ctx.lineTo(x2, y2);
+  ctx.strokeStyle = 'rgba(140, 120, 95, 0.45)';
+  ctx.lineWidth = 2.5;
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // Draw each tooth
+  for (let t = 0; t < settings.teeth; t++) {
+    const offset = (t - (settings.teeth - 1) / 2) * settings.spacing;
+    const tx = cursorPos.x + nx * offset;
+    const ty = cursorPos.y + ny * offset;
+
+    // Tooth prong pointing in the drag direction
+    const prongDir = cursorAngle + Math.PI / 2; // perpendicular to the rake bar
+    const px = Math.cos(prongDir);
+    const py = Math.sin(prongDir);
+
+    // Draw prong
+    ctx.beginPath();
+    ctx.moveTo(tx, ty);
+    ctx.lineTo(tx + px * 8, ty + py * 8);
+    ctx.strokeStyle = 'rgba(140, 120, 95, 0.5)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Draw tooth dot
+    ctx.beginPath();
+    ctx.arc(tx, ty, 2, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(160, 135, 100, 0.7)';
+    ctx.fill();
+  }
+
+  // Center dot (slightly brighter)
+  ctx.beginPath();
+  ctx.arc(cursorPos.x, cursorPos.y, 3, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(200, 170, 120, 0.8)';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+// Lightweight redraw: just blit the buffer and overlay the cursor (no re-rendering sweeps)
+function drawCursorFrame() {
+  if (bufferDirty) renderToBuffer();
+  ctx.drawImage(bufferCanvas, 0, 0);
+  drawRakeCursor();
 }
 
 function drawSelectionIndicator(sw) {
@@ -699,16 +798,32 @@ canvas.addEventListener('mouseenter', e => {
 
 // ── Mouse move ──
 canvas.addEventListener('mousemove', e => {
+  const pos = getCanvasPos(e);
+
+  // Always update cursor position for rake preview
+  lastCursorPos = cursorPos;
+  cursorPos = pos;
+
+  // Update rake angle based on movement direction
+  if (lastCursorPos) {
+    const dx = cursorPos.x - lastCursorPos.x;
+    const dy = cursorPos.y - lastCursorPos.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 2) {
+      // Normal is perpendicular to movement direction
+      cursorAngle = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+  }
+
   if (!dragging) {
-    // In move mode, show grab cursor on hoverable sweeps
     if (mode === 'move') {
-      const pos = getCanvasPos(e);
       canvas.style.cursor = findSweepAt(pos.x, pos.y) >= 0 ? 'grab' : 'default';
+    } else {
+      // Show rake cursor preview (lightweight — just blit buffer + draw cursor)
+      drawCursorFrame();
     }
     return;
   }
-
-  const pos = getCanvasPos(e);
 
   if (mode === 'freehand') {
     freehandPoints.push(pos);
@@ -751,7 +866,6 @@ canvas.addEventListener('mousemove', e => {
     canvas.style.cursor = 'grabbing';
     const dx = pos.x - dragStart.x;
     const dy = pos.y - dragStart.y;
-    // Preview: render with temporary offset on the selected sweep
     drawBase();
     sweeps.forEach((sw, i) => {
       if (i === selectedSweepIdx) {
@@ -812,10 +926,16 @@ function finalizeDrag(e) {
 canvas.addEventListener('mouseup', finalizeDrag);
 document.addEventListener('mouseup', finalizeDrag);
 
-// When mouse leaves canvas, DON'T finalize — the user may drag back in.
-// Just pause drawing. The stroke continues if they re-enter with button held.
+// When mouse leaves canvas, hide the rake cursor but keep drag state alive
 canvas.addEventListener('mouseleave', () => {
-  // Nothing to do — dragging state persists so mouseenter can resume.
+  cursorPos = null;
+  lastCursorPos = null;
+  if (!dragging) {
+    // Redraw without cursor
+    if (!bufferDirty) {
+      ctx.drawImage(bufferCanvas, 0, 0);
+    }
+  }
 });
 
 // ── Touch events ──
@@ -905,8 +1025,10 @@ document.querySelectorAll('.mode-btn').forEach(btn => {
     document.getElementById('modeHelp').textContent = modeHelps[mode];
     document.getElementById('arcOnlyControls').style.display = mode === 'arc' ? 'block' : 'none';
     document.getElementById('freehandOnlyControls').style.display = mode === 'freehand' ? 'block' : 'none';
-    canvas.style.cursor = mode === 'move' ? 'default' : 'crosshair';
+    // In move mode show normal cursor; in draw modes hide it (we draw our own rake cursor)
+    canvas.style.cursor = mode === 'move' ? 'default' : 'none';
     selectedSweepIdx = -1;
+    bufferDirty = true;
     render();
   });
 });
@@ -941,6 +1063,7 @@ function undoLast() {
   if (sweeps.length > 0) {
     sweeps.pop();
     selectedSweepIdx = -1;
+    bufferDirty = true;
     render();
     if (sweeps.length === 0) hint.style.opacity = '1';
   }
@@ -949,6 +1072,7 @@ function undoLast() {
 function clearAll() {
   sweeps = [];
   selectedSweepIdx = -1;
+  bufferDirty = true;
   render();
   hint.style.opacity = '1';
 }
