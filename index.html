@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rake Texture Studio</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #2a2725;
+    color: #e0dbd5;
+    font-family: 'Georgia', serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 20px;
+  }
+  h1 {
+    font-size: 1.3rem;
+    font-weight: 400;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+    color: #c8c0b6;
+  }
+  .subtitle {
+    font-size: 0.82rem;
+    color: #887f75;
+    margin-bottom: 22px;
+    letter-spacing: 0.5px;
+    text-align: center;
+    max-width: 600px;
+    line-height: 1.5;
+  }
+  .app-container {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    max-width: 1200px;
+    width: 100%;
+  }
+  .canvas-wrapper {
+    background: #1e1c1a;
+    padding: 16px;
+    border-radius: 4px;
+    box-shadow: 0 12px 50px rgba(0,0,0,0.4);
+    flex-shrink: 0;
+    position: relative;
+  }
+  canvas { display: block; border-radius: 2px; }
+  .canvas-hint {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: rgba(180, 170, 158, 0.45);
+    font-size: 1rem;
+    letter-spacing: 1px;
+    pointer-events: none;
+    text-align: center;
+    line-height: 1.8;
+    transition: opacity 0.5s;
+  }
+  .controls {
+    background: #353230;
+    padding: 24px;
+    border-radius: 8px;
+    min-width: 300px;
+    max-width: 360px;
+    flex: 1;
+  }
+  .control-group { margin-bottom: 18px; }
+  .control-group label {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-size: 0.8rem;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #a09890;
+    margin-bottom: 8px;
+  }
+  .control-group label span {
+    font-family: monospace;
+    font-size: 0.92rem;
+    color: #d4cdc4;
+    letter-spacing: 0;
+    text-transform: none;
+  }
+  input[type="range"] {
+    -webkit-appearance: none;
+    width: 100%;
+    height: 6px;
+    background: #4a4540;
+    border-radius: 3px;
+    outline: none;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 18px; height: 18px;
+    background: #d4cdc4;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px; height: 18px;
+    background: #d4cdc4;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+  }
+  .action-btn {
+    width: 100%;
+    background: #6b6560;
+    border: none;
+    padding: 11px;
+    font-family: 'Georgia', serif;
+    font-size: 0.85rem;
+    letter-spacing: 1.5px;
+    cursor: pointer;
+    color: #f0ebe3;
+    border-radius: 4px;
+    transition: background 0.3s;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  .action-btn:hover { background: #7b7570; }
+  .action-btn.danger { background: #6b5550; }
+  .action-btn.danger:hover { background: #7b6560; }
+  .separator {
+    border: none;
+    border-top: 1px solid #4a4540;
+    margin: 16px 0;
+  }
+  .info {
+    font-size: 0.72rem;
+    color: #787068;
+    line-height: 1.4;
+    margin-top: 5px;
+  }
+  .sweep-count {
+    font-size: 0.82rem;
+    color: #a09890;
+    text-align: center;
+    margin-bottom: 12px;
+    letter-spacing: 1px;
+  }
+  .mode-toggle {
+    display: flex;
+    gap: 0;
+    margin-bottom: 18px;
+    border-radius: 4px;
+    overflow: hidden;
+  }
+  .mode-btn {
+    flex: 1;
+    background: #4a4540;
+    border: none;
+    padding: 10px 6px;
+    font-family: 'Georgia', serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.5px;
+    cursor: pointer;
+    color: #a09890;
+    transition: all 0.2s;
+    text-align: center;
+  }
+  .mode-btn:hover { background: #5a5550; }
+  .mode-btn.active {
+    background: #6b6560;
+    color: #f0ebe3;
+  }
+  .mode-btn + .mode-btn { border-left: 1px solid #353230; }
+  .mode-help {
+    font-size: 0.72rem;
+    color: #887f75;
+    line-height: 1.5;
+    margin-bottom: 16px;
+    padding: 10px 12px;
+    background: #2e2b28;
+    border-radius: 4px;
+    border-left: 3px solid #6b6560;
+  }
+  .selected-indicator {
+    font-size: 0.78rem;
+    color: #c0a880;
+    text-align: center;
+    margin-bottom: 10px;
+    letter-spacing: 0.5px;
+    min-height: 1.2em;
+  }
+</style>
+</head>
+<body>
+
+<h1>Rake Texture Studio</h1>
+<div class="subtitle" id="subtitleText">Freehand: trace your mouse to rake through the plaster. Arc: click &amp; drag. Move: reposition sweeps.</div>
+
+<div class="app-container">
+  <div class="canvas-wrapper">
+    <canvas id="canvas" width="500" height="670"></canvas>
+    <div class="canvas-hint" id="hint">Trace your mouse here<br>to rake through the plaster</div>
+  </div>
+
+  <div class="controls">
+    <div class="sweep-count" id="sweepCount">0 sweeps</div>
+    <div class="selected-indicator" id="selectedInfo">&nbsp;</div>
+
+    <div class="mode-toggle">
+      <button class="mode-btn active" data-mode="freehand">Freehand</button>
+      <button class="mode-btn" data-mode="arc">Arc</button>
+      <button class="mode-btn" data-mode="move">Move</button>
+    </div>
+
+    <div class="mode-help" id="modeHelp">Trace your mouse across the canvas — the rake follows your path, leaving grooves in the plaster.</div>
+
+    <div class="control-group">
+      <label>Rake Width (teeth) <span id="teethVal">15</span></label>
+      <input type="range" id="teeth" min="3" max="40" step="1" value="15">
+      <div class="info">Number of teeth on the rake.</div>
+    </div>
+
+    <div class="control-group">
+      <label>Tooth Spacing <span id="spacingVal">4px</span></label>
+      <input type="range" id="spacing" min="2" max="14" step="0.5" value="4">
+      <div class="info">Original art ≈ 8px. Half-size ≈ 4px.</div>
+    </div>
+
+    <div class="control-group">
+      <label>Groove Depth <span id="depthVal">3.0</span></label>
+      <input type="range" id="depth" min="1" max="6" step="0.5" value="3">
+    </div>
+
+    <div id="arcOnlyControls">
+      <div class="control-group">
+        <label>Rake Size <span id="sizeVal">250</span></label>
+        <input type="range" id="size" min="80" max="500" step="10" value="250">
+        <div class="info">How far the grooves extend from where you click.</div>
+      </div>
+    </div>
+
+    <div id="freehandOnlyControls">
+      <div class="control-group">
+        <label>Smoothing <span id="smoothVal">5</span></label>
+        <input type="range" id="smooth" min="0" max="15" step="1" value="5">
+        <div class="info">Higher = smoother curves, less jitter.</div>
+      </div>
+    </div>
+
+    <hr class="separator">
+    <button class="action-btn" onclick="undoLast()">Undo Last</button>
+    <button class="action-btn danger" onclick="clearAll()">Clear Canvas</button>
+    <button class="action-btn" onclick="downloadCanvas()">Save as PNG</button>
+  </div>
+</div>
+
+<script>
+const canvas = document.getElementById('canvas');
+const ctx = canvas.getContext('2d');
+const W = canvas.width;
+const H = canvas.height;
+const hint = document.getElementById('hint');
+
+const settings = {
+  teeth: 15,
+  spacing: 4,
+  depth: 3,
+  size: 250,
+  smooth: 5,
+};
+
+// Each sweep: { type: 'freehand' | 'arc', ...data, settings snapshot }
+let sweeps = [];
+let mode = 'freehand'; // 'freehand', 'arc', 'move'
+
+// Interaction state
+let dragging = false;
+let dragStart = null;
+let dragCurrent = null;
+let freehandPoints = [];
+let selectedSweepIdx = -1;
+let moveOffset = null;
+
+// ──────────────────────────────────────────────
+// RENDERING
+// ──────────────────────────────────────────────
+
+function drawBase() {
+  ctx.fillStyle = '#ede8e0';
+  ctx.fillRect(0, 0, W, H);
+}
+
+// Draw a single groove line from an array of {x,y} points
+function drawGrooveLine(points, spacing, depth) {
+  if (points.length < 2) return;
+  const d = depth;
+
+  // Shadow
+  ctx.beginPath();
+  ctx.moveTo(points[0].x + d * 0.7, points[0].y + d * 0.7);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x + d * 0.7, points[i].y + d * 0.7);
+  ctx.strokeStyle = `rgba(160, 148, 132, ${0.35 + d * 0.08})`;
+  ctx.lineWidth = spacing * 0.4;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // Dark center
+  ctx.beginPath();
+  ctx.moveTo(points[0].x + d * 0.3, points[0].y + d * 0.3);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x + d * 0.3, points[i].y + d * 0.3);
+  ctx.strokeStyle = `rgba(140, 128, 112, ${0.25 + d * 0.06})`;
+  ctx.lineWidth = spacing * 0.25;
+  ctx.stroke();
+
+  // Bright ridge
+  ctx.beginPath();
+  ctx.moveTo(points[0].x - d * 0.3, points[0].y - d * 0.3);
+  for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].x - d * 0.3, points[i].y - d * 0.3);
+  ctx.strokeStyle = `rgba(255, 253, 248, ${0.5 + d * 0.1})`;
+  ctx.lineWidth = spacing * 0.35;
+  ctx.stroke();
+}
+
+// ──── Freehand sweep drawing ────
+
+function computeNormals(path) {
+  // For each point, compute the perpendicular (normal) direction
+  const normals = [];
+  for (let i = 0; i < path.length; i++) {
+    let dx, dy;
+    if (i === 0) {
+      dx = path[1].x - path[0].x;
+      dy = path[1].y - path[0].y;
+    } else if (i === path.length - 1) {
+      dx = path[i].x - path[i - 1].x;
+      dy = path[i].y - path[i - 1].y;
+    } else {
+      dx = path[i + 1].x - path[i - 1].x;
+      dy = path[i + 1].y - path[i - 1].y;
+    }
+    const len = Math.sqrt(dx * dx + dy * dy) || 1;
+    // Normal is perpendicular to tangent
+    normals.push({ x: -dy / len, y: dx / len });
+  }
+  return normals;
+}
+
+function drawFreehandSweep(sw, sweepIdx, offsetX, offsetY) {
+  const { path, teeth, spacing, depth } = sw;
+  const ox = offsetX || 0;
+  const oy = offsetY || 0;
+
+  // Apply offset to path
+  const shifted = path.map(p => ({ x: p.x + ox, y: p.y + oy }));
+  if (shifted.length < 2) return;
+
+  const normals = computeNormals(shifted);
+  const halfWidth = (teeth - 1) * spacing / 2;
+
+  // Draw plaster fill region (covers previous grooves)
+  ctx.save();
+  ctx.beginPath();
+  // Forward along +normal side
+  for (let i = 0; i < shifted.length; i++) {
+    const x = shifted[i].x + normals[i].x * (halfWidth + spacing);
+    const y = shifted[i].y + normals[i].y * (halfWidth + spacing);
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  // Backward along -normal side
+  for (let i = shifted.length - 1; i >= 0; i--) {
+    const x = shifted[i].x - normals[i].x * (halfWidth + spacing);
+    const y = shifted[i].y - normals[i].y * (halfWidth + spacing);
+    ctx.lineTo(x, y);
+  }
+  ctx.closePath();
+  const variation = (sweepIdx * 3) % 7 - 3;
+  ctx.fillStyle = `rgb(${237 + variation}, ${232 + variation}, ${224 + variation})`;
+  ctx.fill();
+  ctx.restore();
+
+  // Draw each tooth track
+  for (let t = 0; t < teeth; t++) {
+    const offset = (t - (teeth - 1) / 2) * spacing;
+    const toothPath = shifted.map((p, i) => ({
+      x: p.x + normals[i].x * offset,
+      y: p.y + normals[i].y * offset,
+    }));
+    drawGrooveLine(toothPath, spacing, depth);
+  }
+}
+
+// ──── Arc sweep drawing ────
+
+function drawArcSweep(sw, sweepIdx, offsetX, offsetY) {
+  const { cx: baseCx, cy: baseCy, startAngle, endAngle, minR, maxR, spacing, depth } = sw;
+  const cx = baseCx + (offsetX || 0);
+  const cy = baseCy + (offsetY || 0);
+  const steps = 80;
+
+  // Plaster fill
+  ctx.save();
+  ctx.beginPath();
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const a = startAngle + (endAngle - startAngle) * t;
+    const x = cx + Math.cos(a) * minR;
+    const y = cy + Math.sin(a) * minR;
+    if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+  }
+  for (let i = steps; i >= 0; i--) {
+    const t = i / steps;
+    const a = startAngle + (endAngle - startAngle) * t;
+    ctx.lineTo(cx + Math.cos(a) * maxR, cy + Math.sin(a) * maxR);
+  }
+  ctx.closePath();
+  const variation = (sweepIdx * 3) % 7 - 3;
+  ctx.fillStyle = `rgb(${237 + variation}, ${232 + variation}, ${224 + variation})`;
+  ctx.fill();
+  ctx.restore();
+
+  // Grooves
+  for (let r = minR; r < maxR; r += spacing) {
+    const points = [];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const a = startAngle + (endAngle - startAngle) * t;
+      points.push({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+    }
+    drawGrooveLine(points, spacing, depth);
+  }
+}
+
+// ──── Main draw ────
+
+function drawSweep(sw, idx, ox, oy) {
+  if (sw.type === 'freehand') drawFreehandSweep(sw, idx, ox, oy);
+  else drawArcSweep(sw, idx, ox, oy);
+}
+
+function addGrain() {
+  const imageData = ctx.getImageData(0, 0, W, H);
+  const data = imageData.data;
+  for (let i = 0; i < data.length; i += 4) {
+    const noise = (Math.random() - 0.5) * 5;
+    data[i] = Math.min(255, Math.max(0, data[i] + noise));
+    data[i + 1] = Math.min(255, Math.max(0, data[i + 1] + noise));
+    data[i + 2] = Math.min(255, Math.max(0, data[i + 2] + noise));
+  }
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function render() {
+  drawBase();
+  sweeps.forEach((sw, i) => drawSweep(sw, i, 0, 0));
+  addGrain();
+
+  // Highlight selected sweep in move mode
+  if (mode === 'move' && selectedSweepIdx >= 0 && selectedSweepIdx < sweeps.length) {
+    drawSelectionIndicator(sweeps[selectedSweepIdx]);
+  }
+
+  updateUI();
+}
+
+function drawSelectionIndicator(sw) {
+  ctx.save();
+  ctx.setLineDash([6, 4]);
+  ctx.strokeStyle = 'rgba(200, 170, 120, 0.6)';
+  ctx.lineWidth = 2;
+
+  if (sw.type === 'freehand' && sw.path.length > 1) {
+    const normals = computeNormals(sw.path);
+    const halfW = (sw.teeth - 1) * sw.spacing / 2 + sw.spacing;
+    ctx.beginPath();
+    for (let i = 0; i < sw.path.length; i++) {
+      const x = sw.path[i].x + normals[i].x * halfW;
+      const y = sw.path[i].y + normals[i].y * halfW;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    for (let i = sw.path.length - 1; i >= 0; i--) {
+      ctx.lineTo(sw.path[i].x - normals[i].x * halfW, sw.path[i].y - normals[i].y * halfW);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  } else if (sw.type === 'arc') {
+    const steps = 40;
+    ctx.beginPath();
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const a = sw.startAngle + (sw.endAngle - sw.startAngle) * t;
+      const x = sw.cx + Math.cos(a) * sw.minR;
+      const y = sw.cy + Math.sin(a) * sw.minR;
+      if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+    }
+    for (let i = steps; i >= 0; i--) {
+      const t = i / steps;
+      const a = sw.startAngle + (sw.endAngle - sw.startAngle) * t;
+      ctx.lineTo(sw.cx + Math.cos(a) * sw.maxR, sw.cy + Math.sin(a) * sw.maxR);
+    }
+    ctx.closePath();
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ──────────────────────────────────────────────
+// SMOOTHING
+// ──────────────────────────────────────────────
+
+function smoothPath(points, iterations) {
+  if (points.length < 3 || iterations <= 0) return points;
+  let pts = points.map(p => ({ ...p }));
+  for (let iter = 0; iter < iterations; iter++) {
+    const smoothed = [pts[0]];
+    for (let i = 1; i < pts.length - 1; i++) {
+      smoothed.push({
+        x: pts[i].x * 0.5 + (pts[i - 1].x + pts[i + 1].x) * 0.25,
+        y: pts[i].y * 0.5 + (pts[i - 1].y + pts[i + 1].y) * 0.25,
+      });
+    }
+    smoothed.push(pts[pts.length - 1]);
+    pts = smoothed;
+  }
+  return pts;
+}
+
+// Resample path to even spacing
+function resamplePath(points, step) {
+  if (points.length < 2) return points;
+  const out = [points[0]];
+  let accumulated = 0;
+  for (let i = 1; i < points.length; i++) {
+    const dx = points[i].x - points[i - 1].x;
+    const dy = points[i].y - points[i - 1].y;
+    const segLen = Math.sqrt(dx * dx + dy * dy);
+    accumulated += segLen;
+    while (accumulated >= step) {
+      accumulated -= step;
+      const t = 1 - accumulated / segLen;
+      out.push({
+        x: points[i - 1].x + dx * t,
+        y: points[i - 1].y + dy * t,
+      });
+    }
+  }
+  if (out.length < 2) out.push(points[points.length - 1]);
+  return out;
+}
+
+// ──────────────────────────────────────────────
+// SWEEP CREATION
+// ──────────────────────────────────────────────
+
+function makeFreehandSweep(rawPoints) {
+  let path = resamplePath(rawPoints, 4);
+  path = smoothPath(path, settings.smooth);
+  return {
+    type: 'freehand',
+    path,
+    teeth: settings.teeth,
+    spacing: settings.spacing,
+    depth: settings.depth,
+  };
+}
+
+function makeArcSweep(startX, startY, endX, endY) {
+  const dx = endX - startX;
+  const dy = endY - startY;
+  const dragDist = Math.sqrt(dx * dx + dy * dy);
+  const dirAngle = Math.atan2(dy, dx);
+  const centerDist = Math.max(150, settings.size * 0.8);
+  const cx = startX - Math.cos(dirAngle) * centerDist;
+  const cy = startY - Math.sin(dirAngle) * centerDist;
+  const midAngle = Math.atan2(startY - cy, startX - cx);
+  // Arc span derived entirely from drag distance
+  const halfArc = Math.min(2.5, Math.max(0.3, dragDist / 100));
+  const minR = Math.max(10, centerDist - settings.size / 2);
+  const maxR = centerDist + settings.size / 2;
+
+  return {
+    type: 'arc',
+    cx, cy,
+    startAngle: midAngle - halfArc,
+    endAngle: midAngle + halfArc,
+    minR, maxR,
+    spacing: settings.spacing,
+    depth: settings.depth,
+  };
+}
+
+// ──────────────────────────────────────────────
+// HIT TESTING (for move mode)
+// ──────────────────────────────────────────────
+
+function hitTestSweep(sw, px, py) {
+  if (sw.type === 'freehand' && sw.path.length > 1) {
+    const normals = computeNormals(sw.path);
+    const halfW = (sw.teeth - 1) * sw.spacing / 2 + sw.spacing * 2;
+    for (let i = 0; i < sw.path.length; i++) {
+      const dx = px - sw.path[i].x;
+      const dy = py - sw.path[i].y;
+      if (Math.abs(dx) < halfW + 10 && Math.abs(dy) < halfW + 10) {
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist < halfW + 10) return true;
+      }
+    }
+    return false;
+  } else if (sw.type === 'arc') {
+    const dx = px - sw.cx;
+    const dy = py - sw.cy;
+    const r = Math.sqrt(dx * dx + dy * dy);
+    const a = Math.atan2(dy, dx);
+    // Normalize angle check
+    let sa = sw.startAngle;
+    let ea = sw.endAngle;
+    let ta = a;
+    // Bring into same range
+    while (ta < sa) ta += Math.PI * 2;
+    while (ta > ea + Math.PI * 2) ta -= Math.PI * 2;
+    const inAngle = ta >= sa && ta <= ea;
+    const inRadius = r >= sw.minR - 15 && r <= sw.maxR + 15;
+    return inAngle && inRadius;
+  }
+  return false;
+}
+
+function findSweepAt(px, py) {
+  // Search from top (last drawn) to bottom
+  for (let i = sweeps.length - 1; i >= 0; i--) {
+    if (hitTestSweep(sweeps[i], px, py)) return i;
+  }
+  return -1;
+}
+
+// Offset a sweep's position data
+function offsetSweep(sw, dx, dy) {
+  if (sw.type === 'freehand') {
+    sw.path = sw.path.map(p => ({ x: p.x + dx, y: p.y + dy }));
+  } else {
+    sw.cx += dx;
+    sw.cy += dy;
+  }
+}
+
+// ──────────────────────────────────────────────
+// CANVAS INTERACTION
+// ──────────────────────────────────────────────
+
+function getCanvasPos(e) {
+  const rect = canvas.getBoundingClientRect();
+  const touch = e.touches ? e.touches[0] : e;
+  return {
+    x: (touch.clientX - rect.left) * (W / rect.width),
+    y: (touch.clientY - rect.top) * (H / rect.height),
+  };
+}
+
+// Shared logic to begin a drag from a position
+function beginDrag(pos) {
+  hint.style.opacity = '0';
+  if (mode === 'freehand') {
+    dragging = true;
+    freehandPoints = [pos];
+  } else if (mode === 'arc') {
+    dragging = true;
+    dragStart = pos;
+    dragCurrent = { ...pos };
+  } else if (mode === 'move') {
+    const idx = findSweepAt(pos.x, pos.y);
+    if (idx >= 0) {
+      selectedSweepIdx = idx;
+      dragging = true;
+      dragStart = pos;
+      render();
+    } else {
+      selectedSweepIdx = -1;
+      render();
+    }
+  }
+}
+
+// ── Mouse down ──
+canvas.addEventListener('mousedown', e => {
+  beginDrag(getCanvasPos(e));
+});
+
+// ── Mouse enters canvas while button already held ──
+canvas.addEventListener('mouseenter', e => {
+  // e.buttons: 1 = primary button is pressed
+  if (!dragging && (e.buttons & 1)) {
+    beginDrag(getCanvasPos(e));
+  }
+});
+
+// ── Mouse move ──
+canvas.addEventListener('mousemove', e => {
+  if (!dragging) {
+    // In move mode, show grab cursor on hoverable sweeps
+    if (mode === 'move') {
+      const pos = getCanvasPos(e);
+      canvas.style.cursor = findSweepAt(pos.x, pos.y) >= 0 ? 'grab' : 'default';
+    }
+    return;
+  }
+
+  const pos = getCanvasPos(e);
+
+  if (mode === 'freehand') {
+    freehandPoints.push(pos);
+    // Live preview: render everything + the in-progress freehand
+    drawBase();
+    sweeps.forEach((sw, i) => drawSweep(sw, i, 0, 0));
+    if (freehandPoints.length >= 2) {
+      const preview = makeFreehandSweep(freehandPoints);
+      drawFreehandSweep(preview, sweeps.length, 0, 0);
+    }
+    // Skip grain during live draw for performance
+  } else if (mode === 'arc') {
+    dragCurrent = pos;
+    drawBase();
+    sweeps.forEach((sw, i) => drawSweep(sw, i, 0, 0));
+    const dx = dragCurrent.x - dragStart.x;
+    const dy = dragCurrent.y - dragStart.y;
+    if (Math.sqrt(dx * dx + dy * dy) > 10) {
+      ctx.save();
+      ctx.globalAlpha = 0.5;
+      const preview = makeArcSweep(dragStart.x, dragStart.y, dragCurrent.x, dragCurrent.y);
+      drawArcSweep(preview, sweeps.length, 0, 0);
+      ctx.restore();
+      // Draw drag arrow
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(dragStart.x, dragStart.y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(200, 180, 150, 0.7)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.moveTo(dragStart.x, dragStart.y);
+      ctx.lineTo(dragCurrent.x, dragCurrent.y);
+      ctx.strokeStyle = 'rgba(200, 180, 150, 0.5)';
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 4]);
+      ctx.stroke();
+      ctx.restore();
+    }
+  } else if (mode === 'move' && selectedSweepIdx >= 0) {
+    canvas.style.cursor = 'grabbing';
+    const dx = pos.x - dragStart.x;
+    const dy = pos.y - dragStart.y;
+    // Preview: render with temporary offset on the selected sweep
+    drawBase();
+    sweeps.forEach((sw, i) => {
+      if (i === selectedSweepIdx) {
+        drawSweep(sw, i, dx, dy);
+      } else {
+        drawSweep(sw, i, 0, 0);
+      }
+    });
+  }
+});
+
+// ── Mouse up (document-level so we catch releases outside the canvas too) ──
+function finalizeDrag(e) {
+  if (!dragging) return;
+  dragging = false;
+
+  // Use last known freehand point or canvas pos if mouse is over canvas
+  if (mode === 'freehand') {
+    // Try to add final point if event is over the canvas
+    try { const pos = getCanvasPos(e); freehandPoints.push(pos); } catch(_) {}
+    if (freehandPoints.length >= 3) {
+      sweeps.push(makeFreehandSweep(freehandPoints));
+    }
+    freehandPoints = [];
+    render();
+  } else if (mode === 'arc') {
+    if (dragStart) {
+      let endPos = dragCurrent || dragStart;
+      try { endPos = getCanvasPos(e); } catch(_) {}
+      const dx = endPos.x - dragStart.x;
+      const dy = endPos.y - dragStart.y;
+      if (Math.sqrt(dx * dx + dy * dy) > 10) {
+        sweeps.push(makeArcSweep(dragStart.x, dragStart.y, endPos.x, endPos.y));
+      } else {
+        const angle = Math.random() * Math.PI * 2;
+        sweeps.push(makeArcSweep(dragStart.x, dragStart.y,
+          dragStart.x + Math.cos(angle) * 80, dragStart.y + Math.sin(angle) * 80));
+      }
+    }
+    dragStart = null;
+    dragCurrent = null;
+    render();
+  } else if (mode === 'move' && selectedSweepIdx >= 0) {
+    if (dragStart) {
+      let endPos = dragStart;
+      try { endPos = getCanvasPos(e); } catch(_) {}
+      const dx = endPos.x - dragStart.x;
+      const dy = endPos.y - dragStart.y;
+      if (Math.abs(dx) > 2 || Math.abs(dy) > 2) {
+        offsetSweep(sweeps[selectedSweepIdx], dx, dy);
+      }
+    }
+    dragStart = null;
+    canvas.style.cursor = 'grab';
+    render();
+  }
+}
+canvas.addEventListener('mouseup', finalizeDrag);
+document.addEventListener('mouseup', finalizeDrag);
+
+// When mouse leaves canvas, DON'T finalize — the user may drag back in.
+// Just pause drawing. The stroke continues if they re-enter with button held.
+canvas.addEventListener('mouseleave', () => {
+  // Nothing to do — dragging state persists so mouseenter can resume.
+});
+
+// ── Touch events ──
+canvas.addEventListener('touchstart', e => {
+  e.preventDefault();
+  const pos = getCanvasPos(e);
+  hint.style.opacity = '0';
+  if (mode === 'freehand') {
+    dragging = true;
+    freehandPoints = [pos];
+  } else if (mode === 'arc') {
+    dragging = true;
+    dragStart = pos;
+    dragCurrent = { ...pos };
+  } else if (mode === 'move') {
+    const idx = findSweepAt(pos.x, pos.y);
+    if (idx >= 0) {
+      selectedSweepIdx = idx;
+      dragging = true;
+      dragStart = pos;
+      render();
+    }
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchmove', e => {
+  if (!dragging) return;
+  e.preventDefault();
+  const pos = getCanvasPos(e);
+  if (mode === 'freehand') {
+    freehandPoints.push(pos);
+    drawBase();
+    sweeps.forEach((sw, i) => drawSweep(sw, i, 0, 0));
+    if (freehandPoints.length >= 2) {
+      const preview = makeFreehandSweep(freehandPoints);
+      drawFreehandSweep(preview, sweeps.length, 0, 0);
+    }
+  } else if (mode === 'arc') {
+    dragCurrent = pos;
+    // simplified preview
+    drawBase();
+    sweeps.forEach((sw, i) => drawSweep(sw, i, 0, 0));
+  } else if (mode === 'move' && selectedSweepIdx >= 0) {
+    const dx = pos.x - dragStart.x;
+    const dy = pos.y - dragStart.y;
+    drawBase();
+    sweeps.forEach((sw, i) => drawSweep(sw, i, i === selectedSweepIdx ? dx : 0, i === selectedSweepIdx ? dy : 0));
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', e => {
+  if (!dragging) return;
+  dragging = false;
+  const pos = dragCurrent || (freehandPoints.length > 0 ? freehandPoints[freehandPoints.length - 1] : dragStart);
+  if (mode === 'freehand' && freehandPoints.length >= 3) {
+    sweeps.push(makeFreehandSweep(freehandPoints));
+  } else if (mode === 'arc' && dragStart && pos) {
+    const dx = pos.x - dragStart.x;
+    const dy = pos.y - dragStart.y;
+    if (Math.sqrt(dx * dx + dy * dy) > 10) {
+      sweeps.push(makeArcSweep(dragStart.x, dragStart.y, pos.x, pos.y));
+    }
+  } else if (mode === 'move' && selectedSweepIdx >= 0 && dragStart && pos) {
+    offsetSweep(sweeps[selectedSweepIdx], pos.x - dragStart.x, pos.y - dragStart.y);
+  }
+  freehandPoints = [];
+  dragStart = null;
+  dragCurrent = null;
+  render();
+});
+
+// ──────────────────────────────────────────────
+// CONTROLS
+// ──────────────────────────────────────────────
+
+const modeHelps = {
+  freehand: 'Trace your mouse across the canvas — the rake follows your path, leaving grooves in the plaster.',
+  arc: 'Click & drag to place curved sweeps. The drag direction controls which way the arc bends.',
+  move: 'Click on a sweep to select it, then drag to reposition. The dashed outline shows which sweep is selected.',
+};
+
+document.querySelectorAll('.mode-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    mode = btn.dataset.mode;
+    document.querySelectorAll('.mode-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('modeHelp').textContent = modeHelps[mode];
+    document.getElementById('arcOnlyControls').style.display = mode === 'arc' ? 'block' : 'none';
+    document.getElementById('freehandOnlyControls').style.display = mode === 'freehand' ? 'block' : 'none';
+    canvas.style.cursor = mode === 'move' ? 'default' : 'crosshair';
+    selectedSweepIdx = -1;
+    render();
+  });
+});
+
+// Initialize visibility
+document.getElementById('arcOnlyControls').style.display = 'none';
+document.getElementById('freehandOnlyControls').style.display = 'block';
+
+function wireSlider(id, key, displayId, suffix, isInt) {
+  document.getElementById(id).addEventListener('input', e => {
+    settings[key] = isInt ? parseInt(e.target.value) : parseFloat(e.target.value);
+    document.getElementById(displayId).textContent =
+      (isInt ? settings[key] : settings[key].toFixed(1).replace(/\.0$/, '')) + (suffix || '');
+  });
+}
+wireSlider('teeth', 'teeth', 'teethVal', '', true);
+wireSlider('spacing', 'spacing', 'spacingVal', 'px', false);
+wireSlider('depth', 'depth', 'depthVal', '', false);
+wireSlider('size', 'size', 'sizeVal', '', true);
+wireSlider('smooth', 'smooth', 'smoothVal', '', true);
+
+function updateUI() {
+  document.getElementById('sweepCount').textContent =
+    sweeps.length + ' sweep' + (sweeps.length !== 1 ? 's' : '');
+  document.getElementById('selectedInfo').innerHTML =
+    (mode === 'move' && selectedSweepIdx >= 0)
+      ? 'Selected: sweep #' + (selectedSweepIdx + 1) + ' (' + sweeps[selectedSweepIdx].type + ')'
+      : '&nbsp;';
+}
+
+function undoLast() {
+  if (sweeps.length > 0) {
+    sweeps.pop();
+    selectedSweepIdx = -1;
+    render();
+    if (sweeps.length === 0) hint.style.opacity = '1';
+  }
+}
+
+function clearAll() {
+  sweeps = [];
+  selectedSweepIdx = -1;
+  render();
+  hint.style.opacity = '1';
+}
+
+function downloadCanvas() {
+  // Do a clean render with grain for final output
+  render();
+  const link = document.createElement('a');
+  link.download = 'rake-texture.png';
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+render();
+</script>
+</body>
+</html>
